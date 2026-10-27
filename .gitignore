@@ -1,0 +1,8 @@
+sim/regress/
+sim/my_work/
+sim/transcript
+sim/*.wlf
+syn/db/
+syn/incremental_db/
+syn/output_files/
+__pycache__/
