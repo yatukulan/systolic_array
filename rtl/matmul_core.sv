@@ -102,7 +102,13 @@ generate
 		logic a_valid;
 		logic b_valid;
 
+`ifdef INJECT_BUG
+		// deliberate bug for regression demos: the last row of A is fed
+		// one clock early, so it pairs the wrong A and B values
+		assign a_index = (r == N-1) ? step_count - r + 8'd1 : step_count - r;
+`else
 		assign a_index = step_count - r;
+`endif
 		assign b_index = step_count - r;
 
 		assign a_valid = (core_state == S_CORE_RUN) && (a_index < N);

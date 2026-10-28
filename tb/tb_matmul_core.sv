@@ -1,9 +1,5 @@
 /*
 4x4 INT8 Systolic Array
-Yatukulan Vivekanandan
-Department of Electrical and Computer Engineering
-McMaster University
-Ontario, Canada
 */
 
 // This is the self-checking testbench for matmul_core
@@ -14,6 +10,7 @@ Ontario, Canada
 //   * Reference model: plain nested-loop matrix multiply (behavioural)
 //   * Scoreboard: compares all 16 outputs of every test, counts mismatches
 //   * Protocol checks: done is a 1-clock pulse, latency is exactly 3N cycles
+//   * Functional coverage counters: reports which value corners were hit
 //
 // Plusargs:  +SEED=<n>  +NUM_RANDOM=<n>
 // Prints "TEST PASSED" or "TEST FAILED" (parsed by scripts/regress.py).
@@ -70,6 +67,11 @@ module TB;
 	int seed, num_random;
 	int tests_run, checks_run, mismatches, protocol_errors;
 
+	// Functional coverage bins (counted over all checked outputs/operands)
+	int cov_neg_result, cov_pos_result, cov_zero_result;
+	int cov_min_x_min, cov_max_x_min, cov_max_x_max;
+	int cov_result_max;       // hit the largest possible sum (65536)
+
 	// ---------------- Seeded random generator (xorshift32) ----------------
 	// Used instead of $urandom so a given SEED produces the same matrices
 	// in every simulator.
@@ -115,12 +117,28 @@ module TB;
 		end
 	endtask
 
+	// Operand-pair coverage
+	task sample_operand_coverage();
+		for (int i = 0; i < N; i++)
+			for (int j = 0; j < N; j++)
+				for (int k = 0; k < N; k++) begin
+					if (A[i*N+k] == -128 && B[k*N+j] == -128) cov_min_x_min++;
+					if ((A[i*N+k] == 127 && B[k*N+j] == -128) ||
+						(A[i*N+k] == -128 && B[k*N+j] == 127)) cov_max_x_min++;
+					if (A[i*N+k] == 127 && B[k*N+j] == 127) cov_max_x_max++;
+				end
+	endtask
+
 	// ---------------- Scoreboard ----------------
 	task check_results(input int test_id);
 		for (int idx = 0; idx < N*N; idx++) begin
 			int got;
 			got = $signed(c_flat[idx*AW +: AW]);
 			checks_run++;
+			if (got < 0)       cov_neg_result++;
+			else if (got > 0)  cov_pos_result++;
+			else               cov_zero_result++;
+			if (got == 65536)  cov_result_max++;
 			if (got !== C_ref[idx]) begin
 				mismatches++;
 				if (mismatches <= 10)
@@ -134,6 +152,7 @@ module TB;
 	task run_one(input int test_id);
 		int cycles;
 		compute_reference();
+		sample_operand_coverage();
 		drive_operands();
 
 		@(negedge clock_50) start = 1'b1;
@@ -193,6 +212,8 @@ module TB;
 		rng_state = (seed == 0) ? 32'h1 : seed;
 
 		tests_run = 0; checks_run = 0; mismatches = 0; protocol_errors = 0;
+		cov_neg_result = 0; cov_pos_result = 0; cov_zero_result = 0;
+		cov_min_x_min = 0; cov_max_x_min = 0; cov_max_x_max = 0; cov_result_max = 0;
 
 		$display("=== matmul_core testbench: SEED=%0d NUM_RANDOM=%0d ===", seed, num_random);
 		start  = 1'b0;
@@ -261,6 +282,10 @@ module TB;
 		$display("Outputs checked  : %0d", checks_run);
 		$display("Mismatches       : %0d", mismatches);
 		$display("Protocol errors  : %0d", protocol_errors);
+		$display("Coverage: negative=%0d positive=%0d zero=%0d results",
+				 cov_neg_result, cov_pos_result, cov_zero_result);
+		$display("Coverage: (-128)x(-128)=%0d  127x(-128)=%0d  127x127=%0d pairs, max-sum hits=%0d",
+				 cov_min_x_min, cov_max_x_min, cov_max_x_max, cov_result_max);
 		if (mismatches == 0 && protocol_errors == 0) $display("TEST PASSED");
 		else                                          $display("TEST FAILED");
 		$display("--------------------------------------------------");
