@@ -14,6 +14,7 @@ set_global_assignment -name SOURCE_FILE ../rtl/define_state.h
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/PE.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/systolic_array.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/matmul_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/UART_receiver.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/PB_controller.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/convert_hex_to_seven_segment.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/matmul_uart_top.sv
