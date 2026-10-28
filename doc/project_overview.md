@@ -9,7 +9,7 @@ This project is a small but complete version of that block:
 - **Designed** in SystemVerilog as a 4×4 array of INT8 processing elements with INT32 accumulators.
 - **Verified** the way an industry DV team would: directed and randomized tests, a reference model, a scoreboard, protocol checks, coverage counters, a seeded Python regression, and a deliberately injected bug to prove the testbench catches real errors.
 - **Deployed** on the DE2-115 FPGA. A PC sends matrices over UART, the FPGA computes C = A × B, and Python checks every result on real hardware.
-- **Written in the COMPENG 3DQ5 coding style:** same directory layout, file header and `DISABLE_DEFAULT_NET` guard, tabs, `define_state.h` FSM types, `resetn = ~SWITCH_I[17]` with asynchronous active-low reset, sized literals, `*_unit` instance names, `PB_controller` push buttons, `convert_hex_to_seven_segment` displays, DE2-115 pinout and timing scripts, and the lab ModelSim `.do` scripts. Every file was written for this project; no course-provided source is included.
+- **Consistent coding conventions:** `board/ rtl/ sim/ syn/ tb/` layout, block-comment file headers with a `DISABLE_DEFAULT_NET` guard, tabs, all FSM state types in `define_state.h`, `resetn = ~SWITCH_I[17]` with asynchronous active-low reset, sized literals, `*_unit` instance names, and ModelSim `.do` scripts for every testbench.
 
 ## Value
 
@@ -106,7 +106,7 @@ The last pair (A33 × B33) reaches PE(3,3) at t = 3N − 3 = 9, so the array run
 
 | Module | Role |
 |---|---|
-| `rtl/define_state.h` | FSM state types for the whole design (3DQ5 style): `core_state_type`, `RX_controller_state_type`, `TX_controller_state_type`, `top_state_type` |
+| `rtl/define_state.h` | FSM state types for the whole design: `core_state_type`, `RX_controller_state_type`, `TX_controller_state_type`, `top_state_type` |
 | `rtl/PE.sv` | One processing element: signed 8×8 multiply, 32-bit accumulate, forward A right and B down |
 | `rtl/systolic_array.sv` | Generates the 4×4 grid and wires neighbours together (parameterized by N) |
 | `rtl/matmul_core.sv` | Control FSM (IDLE → CLEAR → RUN → DONE), operand registers, skewed edge feeders, `INJECT_BUG` hook |
@@ -169,7 +169,7 @@ python3 scripts/regress.py --sim iverilog  --tb pe  --seeds 20
 
 ### Results
 
-These were run during development with Verilator 5.020 and Icarus Verilog 12. Re-run them in ModelSim to confirm on the lab tools.
+These were run during development with Verilator 5.020 and Icarus Verilog 12. Re-run them in ModelSim to confirm.
 
 | Run | Result |
 |---|---|
@@ -192,7 +192,7 @@ MISMATCH test 2 C[3][0]: expected 65536, got 49152
 
 ## 4. How to run it
 
-### ModelSim (same flow as the 3DQ5 labs)
+### ModelSim
 
 ```
 cd sim
@@ -212,7 +212,7 @@ Waveform tip: in `waves.do`, watch `a_edge` and `b_edge` to see the diagonal wav
 ### On the board
 
 1. Connect the DE2-115 RS-232 port to the PC through an RS-232-to-USB adapter.
-2. Flip **SW17** up and back down to reset (3DQ5 convention).
+2. Flip **SW17** up and back down to reset.
 3. Run:
    ```
    pip install pyserial
