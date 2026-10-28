@@ -1,17 +1,15 @@
 /*
 4x4 INT8 Systolic Array
-Yatukulan Vivekanandan
-Department of Electrical and Computer Engineering
-McMaster University
-Ontario, Canada
 */
 
 // This is the self-checking testbench for matmul_core
 //
 //   * Directed tests: zeros, identity, extreme values, sign mixes
+//   * Randomized tests: NUM_RANDOM matrix pairs from a seeded generator
 //   * Reference model: plain nested-loop matrix multiply (behavioural)
 //   * Scoreboard: compares all 16 outputs of every test, counts mismatches
 //
+// Plusargs:  +SEED=<n>  +NUM_RANDOM=<n>
 // Prints "TEST PASSED" or "TEST FAILED" (parsed by scripts/regress.py).
 //
 // Written in plain procedural SystemVerilog so it runs unchanged in
@@ -60,7 +58,34 @@ module TB;
 	int B [0:N*N-1];          // B[k*N+j]
 	int C_ref [0:N*N-1];      // expected result
 
+	int seed, num_random;
 	int tests_run, checks_run, mismatches;
+
+	// ---------------- Seeded random generator (xorshift32) ----------------
+	// Used instead of $urandom so a given SEED produces the same matrices
+	// in every simulator.
+	logic [31:0] rng_state;
+
+	function logic [31:0] rng_next();
+		logic [31:0] x;
+		x = rng_state;
+		x = x ^ (x << 13);
+		x = x ^ (x >> 17);
+		x = x ^ (x << 5);
+		rng_state = x;
+		return x;
+	endfunction
+
+	// Random INT8, with extra weight on corner values that catch sign bugs
+	function int rand_int8();
+		logic [31:0] r;
+		r = rng_next();
+		case (r[31:29])
+			3'd0: return -128;
+			3'd1: return 127;
+			default: return $signed(r[7:0]);
+		endcase
+	endfunction
 
 	// ---------------- Reference model ----------------
 	task compute_reference();
@@ -125,11 +150,10 @@ module TB;
 		end
 	endtask
 
-	// Deterministic operands with every value distinct and mixed signs
-	task fill_ramp(input int a0, input int b0);
+	task fill_random();
 		for (int idx = 0; idx < N*N; idx++) begin
-			A[idx] = a0 + 13 * idx;
-			B[idx] = b0 - 11 * idx;
+			A[idx] = rand_int8();
+			B[idx] = rand_int8();
 		end
 	endtask
 
@@ -143,10 +167,14 @@ module TB;
 
 	// ---------------- Main sequence ----------------
 	initial begin
+		$timeformat(-6, 2, "us", 10);
+		if (!$value$plusargs("SEED=%d", seed))             seed = 1;
+		if (!$value$plusargs("NUM_RANDOM=%d", num_random)) num_random = 500;
+		rng_state = (seed == 0) ? 32'h1 : seed;
+
 		tests_run = 0; checks_run = 0; mismatches = 0;
 
-		$timeformat(-6, 2, "us", 10);
-		$display("=== matmul_core testbench: directed tests ===");
+		$display("=== matmul_core testbench: SEED=%0d NUM_RANDOM=%0d ===", seed, num_random);
 		start  = 1'b0;
 		a_flat = '0;
 		b_flat = '0;
@@ -159,7 +187,7 @@ module TB;
 		$display("[directed] max x min");             fill(127, -128);  run_one(3);
 
 		$display("[directed] identity x random");
-		fill_ramp(-100, 90);
+		fill_random();
 		for (int i = 0; i < N; i++)
 			for (int k = 0; k < N; k++) A[i*N+k] = (i == k) ? 1 : 0;
 		run_one(4);
@@ -170,6 +198,13 @@ module TB;
 			B[idx] = -(idx + 1);
 		end
 		run_one(5);
+
+		// ---- Randomized tests (back-to-back, no reset between them) ----
+		$display("[random] %0d matrix pairs", num_random);
+		for (int t = 0; t < num_random; t++) begin
+			fill_random();
+			run_one(100 + t);
+		end
 
 		// ---- Report ----
 		$display("--------------------------------------------------");
@@ -184,7 +219,7 @@ module TB;
 
 	// Global watchdog
 	initial begin
-		#(64'd20 * 64'd100000);
+		#(64'd20 * 64'd2000000);
 		$display("TEST FAILED (global timeout)");
 		$stop;
 	end
