@@ -1,13 +1,19 @@
 /*
 4x4 INT8 Systolic Array
+Yatukulan Vivekanandan
+Department of Electrical and Computer Engineering
+McMaster University
+Ontario, Canada
 */
 
 // This is the self-checking testbench for matmul_core
 //
-//   * Directed tests: zeros, identity, extreme values, sign mixes
+//   * Directed tests: zeros, identity, extreme values, sign mixes,
+//     start-while-busy, reset in the middle of a run
 //   * Randomized tests: NUM_RANDOM matrix pairs from a seeded generator
 //   * Reference model: plain nested-loop matrix multiply (behavioural)
 //   * Scoreboard: compares all 16 outputs of every test, counts mismatches
+//   * Protocol checks: done is a 1-clock pulse, latency is exactly 3N cycles
 //
 // Plusargs:  +SEED=<n>  +NUM_RANDOM=<n>
 // Prints "TEST PASSED" or "TEST FAILED" (parsed by scripts/regress.py).
@@ -25,6 +31,9 @@ module TB;
 	parameter N = 4;
 	parameter DW = 8;
 	parameter AW = 32;
+	// Clock cycles from the cycle start is high until done is high:
+	// 1 (load) + 1 (clear) + (3N-2) (run) = 3N  -> 12 for N = 4
+	parameter EXPECTED_LATENCY = 3*N;
 	parameter TIMEOUT_CYCLES = 1000;
 
 	// ---------------- DUT signals ----------------
@@ -59,7 +68,7 @@ module TB;
 	int C_ref [0:N*N-1];      // expected result
 
 	int seed, num_random;
-	int tests_run, checks_run, mismatches;
+	int tests_run, checks_run, mismatches, protocol_errors;
 
 	// ---------------- Seeded random generator (xorshift32) ----------------
 	// Used instead of $urandom so a given SEED produces the same matrices
@@ -137,9 +146,20 @@ module TB;
 
 		if (!done) begin
 			$display("  ERROR test %0d: timeout waiting for done", test_id);
-			mismatches++;
-		end else check_results(test_id);
-		@(negedge clock_50);
+			protocol_errors++;
+		end else begin
+			if (cycles != EXPECTED_LATENCY) begin
+				$display("  ERROR test %0d: latency %0d, expected %0d",
+						 test_id, cycles, EXPECTED_LATENCY);
+				protocol_errors++;
+			end
+			check_results(test_id);
+			@(negedge clock_50);
+			if (done) begin
+				$display("  ERROR test %0d: done held high for more than 1 clock", test_id);
+				protocol_errors++;
+			end
+		end
 		tests_run++;
 	endtask
 
@@ -172,7 +192,7 @@ module TB;
 		if (!$value$plusargs("NUM_RANDOM=%d", num_random)) num_random = 500;
 		rng_state = (seed == 0) ? 32'h1 : seed;
 
-		tests_run = 0; checks_run = 0; mismatches = 0;
+		tests_run = 0; checks_run = 0; mismatches = 0; protocol_errors = 0;
 
 		$display("=== matmul_core testbench: SEED=%0d NUM_RANDOM=%0d ===", seed, num_random);
 		start  = 1'b0;
@@ -199,6 +219,35 @@ module TB;
 		end
 		run_one(5);
 
+		$display("[directed] start pulsed while busy must be ignored");
+		fill_random();
+		compute_reference();
+		drive_operands();
+		@(negedge clock_50) start = 1'b1;
+		@(negedge clock_50) start = 1'b0;
+		repeat (3) @(negedge clock_50);
+		a_flat = ~a_flat;                 // change operands and pulse start mid-run
+		@(negedge clock_50) start = 1'b1;
+		@(negedge clock_50) start = 1'b0;
+		while (!done) @(negedge clock_50);
+		check_results(6);
+		tests_run++;
+		@(negedge clock_50);
+
+		$display("[directed] reset in the middle of a run, then a clean run");
+		fill(5, 7);
+		drive_operands();
+		@(negedge clock_50) start = 1'b1;
+		@(negedge clock_50) start = 1'b0;
+		repeat (4) @(negedge clock_50);
+		apply_reset();
+		if (c_flat !== '0 || busy) begin
+			$display("  ERROR: state not cleared by reset");
+			protocol_errors++;
+		end
+		fill_random();
+		run_one(7);
+
 		// ---- Randomized tests (back-to-back, no reset between them) ----
 		$display("[random] %0d matrix pairs", num_random);
 		for (int t = 0; t < num_random; t++) begin
@@ -211,8 +260,9 @@ module TB;
 		$display("Tests run        : %0d", tests_run);
 		$display("Outputs checked  : %0d", checks_run);
 		$display("Mismatches       : %0d", mismatches);
-		if (mismatches == 0) $display("TEST PASSED");
-		else                 $display("TEST FAILED");
+		$display("Protocol errors  : %0d", protocol_errors);
+		if (mismatches == 0 && protocol_errors == 0) $display("TEST PASSED");
+		else                                          $display("TEST FAILED");
 		$display("--------------------------------------------------");
 		$stop;
 	end
