@@ -15,3 +15,10 @@ set_input_delay -clock clk_50 -min 2 [all_inputs]
 
 set_output_delay -clock clk_50 -max 3 [all_outputs]
 set_output_delay -clock clk_50 -min 2 [all_outputs]
+
+# Specify the false paths on I/Os
+# (switches, push buttons and the UART input are synchronized or slow;
+#  LEDs, seven segment displays and the UART output are slow)
+
+set_false_path -from [all_inputs] -to clk_50
+set_false_path -from clk_50 -to [all_outputs]
