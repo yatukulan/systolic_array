@@ -11,6 +11,7 @@ Examples (run from the project root):
     python3 scripts/regress.py --sim modelsim  --seeds 50
     python3 scripts/regress.py --sim verilator --seeds 200 --num 500
     python3 scripts/regress.py --sim iverilog  --seeds 20 --inject-bug
+    python3 scripts/regress.py --sim modelsim  --tb top --seeds 10
     python3 scripts/regress.py --sim iverilog  --tb pe  --seeds 20
 
 --sim modelsim uses vlog/vsim from the Questa/ModelSim Intel FPGA edition
@@ -28,6 +29,8 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 RTL_CORE = ["rtl/PE.sv", "rtl/systolic_array.sv", "rtl/matmul_core.sv"]
+RTL_TOP = RTL_CORE + ["rtl/UART_receiver.sv", "rtl/UART_transmitter.sv", "rtl/PB_controller.sv",
+                      "rtl/convert_hex_to_seven_segment.sv", "rtl/matmul_uart_top.sv"]
 
 RTL_INC = os.path.join(ROOT, "rtl")      # for `include "define_state.h"
 
@@ -35,6 +38,7 @@ BENCHES = {
     # name: (top module, testbench file, rtl list, count plusarg)
     "pe": ("TB_PE", "tb/tb_pe.sv", ["rtl/PE.sv"], "NUM_RANDOM"),
     "core": ("TB", "tb/tb_matmul_core.sv", RTL_CORE, "NUM_RANDOM"),
+    "top": ("TB_TOP", "tb/tb_top_uart.sv", RTL_TOP, "NUM_MATRICES"),
 }
 
 
@@ -94,12 +98,12 @@ def main():
     p.add_argument("--seeds", type=int, default=20, help="number of seeds to run")
     p.add_argument("--first-seed", type=int, default=1)
     p.add_argument("--num", type=int, default=None,
-                   help="random tests per seed (default 2000 pe / 500 core)")
+                   help="random tests per seed (default 2000 pe / 500 core / 20 top)")
     p.add_argument("--inject-bug", action="store_true",
                    help="compile with +define+INJECT_BUG to prove the bench catches bugs")
     a = p.parse_args()
 
-    num = a.num if a.num is not None else {"pe": 2000, "core": 500}[a.tb]
+    num = a.num if a.num is not None else {"pe": 2000, "core": 500, "top": 20}[a.tb]
     tag = f"{a.sim}_{a.tb}{'_bug' if a.inject_bug else ''}"
     build_dir = os.path.join(ROOT, "sim", "regress", tag)
     log_dir = os.path.join(build_dir, "logs")
