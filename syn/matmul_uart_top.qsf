@@ -10,6 +10,7 @@ set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 1
 set_global_assignment -name NOMINAL_CORE_SUPPLY_VOLTAGE 1.2V
 set_global_assignment -name NUM_PARALLEL_PROCESSORS ALL
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/PE.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/PB_controller.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/convert_hex_to_seven_segment.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/matmul_uart_top.sv
