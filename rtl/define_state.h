@@ -26,5 +26,14 @@ typedef enum logic [1:0] {
 	S_TXC_STOP_BIT
 } TX_controller_state_type;
 
+// matmul_uart_top: receive 32 bytes -> compute -> send 64 bytes
+typedef enum logic [2:0] {
+	S_TOP_RECEIVE,
+	S_TOP_START,
+	S_TOP_COMPUTE,
+	S_TOP_TX_SEND,
+	S_TOP_TX_WAIT
+} top_state_type;
+
 `define DEFINE_STATE 1
 `endif
