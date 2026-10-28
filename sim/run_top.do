@@ -37,6 +37,12 @@ add wave -uns UUT/matrix_count
 add wave -bin UUT/core_start
 add wave -bin UUT/core_done
 
+add wave -divider -height 10 {Board display}
+add wave -bin push_button_n
+add wave -bin UUT/PB_pushed
+add wave -uns UUT/C_index
+add wave -hex UUT/C_selected
+
 # run simulation
 run -all
 

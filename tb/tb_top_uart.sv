@@ -1,9 +1,5 @@
 /*
 4x4 INT8 Systolic Array
-Yatukulan Vivekanandan
-Department of Electrical and Computer Engineering
-McMaster University
-Ontario, Canada
 */
 
 // This is the system-level testbench for the DE2-115 top level
@@ -13,6 +9,10 @@ Ontario, Canada
 // behavioural reference model used in the core testbench. This exercises
 // the whole path the board uses: UART RX -> byte packing -> systolic core
 // -> result serialization -> UART TX.
+//
+// It then plays the user at the board: presses PUSH_BUTTON_N_I[0..2] to
+// step through C[i][j] and checks the 7-segment displays against the last
+// result (index on HEX3/HEX2, value on HEX7..HEX4, count on HEX1/HEX0).
 //
 // The UART runs at CLKS_PER_BIT = 16 and the push buttons are sampled every
 // 4 clocks in simulation (instead of 434 and 50,000) so the test finishes
@@ -62,7 +62,7 @@ module TB_TOP;
 	int B [0:N*N-1];
 	int C_ref [0:N*N-1];
 
-	int seed, num_matrices, mismatches, framing_errors;
+	int seed, num_matrices, mismatches, framing_errors, display_errors;
 	logic [31:0] rng_state;
 
 	// ---------------- PC-side UART monitor (decodes FPGA TX) ----------------
@@ -152,6 +152,58 @@ module TB_TOP;
 		end
 	endtask
 
+	// ---------------- Board-side helpers (push buttons and HEX displays) ----------------
+	// Hold a button, then release it for longer than the 10-sample debounce window
+	task press_button(input int b);
+		push_button_n[b] = 1'b0;
+		repeat (16 * CLKS_PER_SAMPLE) @(posedge clock_50);
+		push_button_n[b] = 1'b1;
+		repeat (16 * CLKS_PER_SAMPLE) @(posedge clock_50);
+	endtask
+
+	// Decode an active-low 7-segment pattern back to its hex digit (-1 if invalid)
+	function int seg_to_hex(input logic [6:0] seg_n);
+		case (seg_n)
+			7'b1000000: return 4'h0;  7'b1111001: return 4'h1;
+			7'b0100100: return 4'h2;  7'b0110000: return 4'h3;
+			7'b0011001: return 4'h4;  7'b0010010: return 4'h5;
+			7'b0000010: return 4'h6;  7'b1111000: return 4'h7;
+			7'b0000000: return 4'h8;  7'b0010000: return 4'h9;
+			7'b0001000: return 4'hA;  7'b0000011: return 4'hB;
+			7'b1000110: return 4'hC;  7'b0100001: return 4'hD;
+			7'b0000110: return 4'hE;  7'b0001110: return 4'hF;
+			default:    return -1;
+		endcase
+	endfunction
+
+	function int read_hex(input int lo, input int hi);
+		int v, d;
+		v = 0;
+		for (int h = hi; h >= lo; h--) begin
+			d = seg_to_hex(seven_seg_n[h]);
+			if (d < 0) return -1;
+			v = v * 16 + d;
+		end
+		return v;
+	endfunction
+
+	// HEX3/HEX2 must show (i, j), HEX7..HEX4 the low 16 bits of C[i][j]
+	task check_display(input int idx, input int count);
+		int shown_i, shown_j, shown_val, shown_count, expect_val;
+		shown_i     = read_hex(3, 3);
+		shown_j     = read_hex(2, 2);
+		shown_val   = read_hex(4, 7);
+		shown_count = read_hex(0, 1);
+		expect_val  = C_ref[idx] & 16'hFFFF;
+		if (shown_i != idx / N || shown_j != idx % N ||
+			shown_val != expect_val || shown_count != (count & 8'hFF)) begin
+			display_errors++;
+			$display("  DISPLAY ERROR: expected C[%0d][%0d]=%04h count=%02h, HEX shows C[%0d][%0d]=%04h count=%02h",
+					 idx / N, idx % N, expect_val, count & 8'hFF,
+					 shown_i, shown_j, shown_val, shown_count);
+		end
+	endtask
+
 	initial begin
 		$timeformat(-6, 2, "us", 10);
 		if (!$value$plusargs("SEED=%d", seed))                 seed = 1;
@@ -159,6 +211,7 @@ module TB_TOP;
 		rng_state      = (seed == 0) ? 32'h1 : seed;
 		mismatches     = 0;
 		framing_errors = 0;
+		display_errors = 0;
 
 		$display("=== system (UART) testbench: SEED=%0d NUM_MATRICES=%0d ===", seed, num_matrices);
 		uart_rx       = 1'b1;
@@ -186,11 +239,26 @@ module TB_TOP;
 			run_matrix(t);
 		end
 
+		// Board display: C_ref still holds the last matrix sent
+		$display("[board] stepping through C[i][j] with the push buttons");
+		repeat (2 * CLKS_PER_BIT) @(posedge clock_50);                 // let the last stop bit finish
+		check_display(0, num_matrices + 1);                      // starts at C[0][0]
+		for (int idx = 1; idx < N*N; idx++) begin                 // PB0: next
+			press_button(0);
+			check_display(idx, num_matrices + 1);
+		end
+		press_button(0);  check_display(0, num_matrices + 1);     // wraps 15 -> 0
+		press_button(1);  check_display(N*N-1, num_matrices + 1); // PB1: previous, wraps 0 -> 15
+		press_button(1);  check_display(N*N-2, num_matrices + 1);
+		press_button(2);  check_display(0, num_matrices + 1);     // PB2: back to C[0][0]
+
 		$display("Matrices sent    : %0d", num_matrices + 1);
 		$display("Reply bytes      : %0d", rx_count);
 		$display("Mismatches       : %0d", mismatches);
 		$display("Framing errors   : %0d", framing_errors);
-		if (mismatches == 0 && framing_errors == 0 && rx_count == 64 * (num_matrices + 1))
+		$display("Display errors   : %0d", display_errors);
+		if (mismatches == 0 && framing_errors == 0 && display_errors == 0 &&
+			rx_count == 64 * (num_matrices + 1))
 			$display("TEST PASSED");
 		else
 			$display("TEST FAILED");
