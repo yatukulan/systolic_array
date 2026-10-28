@@ -1,9 +1,5 @@
 /*
 4x4 INT8 Systolic Array
-Yatukulan Vivekanandan
-Department of Electrical and Computer Engineering
-McMaster University
-Ontario, Canada
 */
 
 `timescale 1ns/100ps

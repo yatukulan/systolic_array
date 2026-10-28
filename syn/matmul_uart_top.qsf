@@ -1,0 +1,22 @@
+# Quartus settings for the DE2-115 (Cyclone IV E EP4CE115F29C7)
+# Open syn/matmul_uart_top.qpf in Quartus Prime Lite and compile.
+set_global_assignment -name FAMILY "Cyclone IV E"
+set_global_assignment -name DEVICE EP4CE115F29C7
+set_global_assignment -name TOP_LEVEL_ENTITY matmul_uart_top
+set_global_assignment -name ORIGINAL_QUARTUS_VERSION 19.1.0
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
+set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
+set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 1
+set_global_assignment -name NOMINAL_CORE_SUPPLY_VOLTAGE 1.2V
+set_global_assignment -name NUM_PARALLEL_PROCESSORS ALL
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/PB_controller.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/convert_hex_to_seven_segment.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../rtl/matmul_uart_top.sv
+set_global_assignment -name SOURCE_TCL_SCRIPT_FILE ../board/pinout_50_MHz.tcl
+set_global_assignment -name SOURCE_TCL_SCRIPT_FILE ../board/pinout_switches.tcl
+set_global_assignment -name SOURCE_TCL_SCRIPT_FILE ../board/pinout_push_buttons.tcl
+set_global_assignment -name SOURCE_TCL_SCRIPT_FILE ../board/pinout_green_leds.tcl
+set_global_assignment -name SOURCE_TCL_SCRIPT_FILE ../board/pinout_7segs.tcl
+set_global_assignment -name SOURCE_TCL_SCRIPT_FILE ../board/pinout_uart.tcl
+set_global_assignment -name SDC_FILE ../board/timing_50_MHz.sdc
